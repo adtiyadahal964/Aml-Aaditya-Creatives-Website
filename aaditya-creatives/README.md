@@ -19,6 +19,6 @@ A static, responsive portfolio and business website for Aaditya. The site has ni
 4. Any approved testimonials, logos, credentials, and results that may be published.
 5. Reviewed privacy and terms documents suitable for the tools and services actually used.
 6. DNS access for `aadityadahal1.com.np` if the custom domain should be connected to this deployment.
-7. Profile URLs for Facebook, Instagram, LinkedIn, YouTube, and WhatsApp. The footer lists the platforms as text until the real links are provided.
+7. Keep the verified LinkedIn, Facebook, Instagram, and WhatsApp profile links current.
 
 There is no analytics service, conversion tracking service, booking integration, or form backend configured. Consultation links have a `data-conversion` hook for future tracking. The English/Nepali switch links to real translated static pages and preserves the chosen language while navigating.

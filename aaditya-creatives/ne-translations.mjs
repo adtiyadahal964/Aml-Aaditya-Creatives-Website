@@ -360,7 +360,7 @@ Object.assign(translations, {
 Object.assign(translations, copyTranslations, latestTranslations);
 
 const untranslated = new Set();
-const keep = new Set(['Aaditya', 'Creatives', 'A', 'SEO', 'Facebook', 'Instagram', 'LinkedIn', 'YouTube', 'WhatsApp', '#101c34', '#20251F', 'https://', 'https://yourwebsite.com', 'website', 'width=device-width, initial-scale=1', 'you@example.com']);
+const keep = new Set(['Aaditya', 'Creatives', 'A', 'SEO', 'Facebook', 'Instagram', 'LinkedIn', 'WhatsApp', '#101c34', '#20251F', 'https://', 'https://yourwebsite.com', 'website', 'width=device-width, initial-scale=1', 'you@example.com']);
 
 function translateValue(value) {
   const trimmed = value.trim();

@@ -1,6 +1,14 @@
 const menuButton = document.querySelector('.menu-toggle');
 const nav = document.querySelector('.site-nav');
 const mobileNav = window.matchMedia('(max-width: 950px)');
+const siteHeader = document.querySelector('.site-header');
+const updateHeaderOffset = () => {
+  if (!siteHeader) return;
+  document.documentElement.style.setProperty('--site-header-height', `${Math.ceil(siteHeader.getBoundingClientRect().height)}px`);
+};
+updateHeaderOffset();
+if (siteHeader && 'ResizeObserver' in window) new ResizeObserver(updateHeaderOffset).observe(siteHeader);
+window.addEventListener('resize', updateHeaderOffset, { passive: true });
 const ui = {
   open: 'Open navigation', close: 'Close navigation',
   notProvided: 'Not provided',
