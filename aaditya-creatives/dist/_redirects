@@ -2,3 +2,6 @@
 /services/google-ads/* /services/ 301
 /services/digital-marketing/* /services/#ai-marketing 301
 /services/website-design/* /services/#websites-landing-pages 301
+/services/meta-ads/* /services/paid-advertising/ 301
+/services/email-marketing/* /services/email-marketing-and-lead-generation/ 301
+/services/lead-generation/* /services/email-marketing-and-lead-generation/ 301
