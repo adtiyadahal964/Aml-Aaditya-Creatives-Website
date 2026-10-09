@@ -1,24 +1,23 @@
 # Aaditya Creatives
 
-A static, responsive portfolio and business website for Aaditya. The site has nine English routes and matching Nepali routes under `/ne/`: Home, About, Services, Projects, Blog, Contact, Free Consultation, and clearly marked Privacy Policy and Terms placeholders.
+A static, responsive portfolio and business website for Aaditya. The site includes Home, About, Services, six service detail pages, Blog, Contact, Free Consultation, and clearly marked Privacy Policy and Terms placeholders. Legacy project and service URLs redirect to the current service directory.
 
 ## Edit and preview
 
-- Edit English page copy and templates in `build.mjs`. Add the matching Nepali text in `ne-translations.mjs`.
+- Edit page copy and templates in `build.mjs`.
 - Edit visual styles in `dist/style.css` and menu or inquiry behavior in `dist/site.js`.
-- The shared Home and About hero image is `dist/hero-workspace.jpg`. Replace it with a supplied portrait or brand photograph when one is available, keeping the image descriptions accurate.
+- Service and consultation images are stored in `dist/images/services/`. Keep their descriptions accurate and use clean, licensed source images.
 - Run `node build.mjs` after changing `build.mjs` to regenerate the HTML in `dist/`.
-- Run `CHECK_TRANSLATIONS=1 node build.mjs` in a Unix shell, or set `$env:CHECK_TRANSLATIONS='1'` before running the build in PowerShell, to list untranslated strings. Brand names and technical values may remain in English.
-- Run `node server.mjs` to preview at `http://127.0.0.1:4173/`.
+- On Windows, run `.\preview.ps1` to rebuild the site, start the preview server in the background, and verify it at `http://127.0.0.1:4173/`. The link remains available after the terminal command finishes, until the Node process is stopped or the computer restarts.
+- Alternatively, run `node server.mjs` for a foreground preview session.
+- Review the local preview before committing or pushing website changes to GitHub.
 
 ## Details needed before public launch
 
-1. A real scheduling URL or inbox for the free consultation. The consultation form currently validates and prepares a local, copyable request; it does not send or reserve a time.
-2. A real contact email or other preferred contact channel. The current inquiry form only prepares text locally; it does not transmit data.
-3. Genuine project details and assets, with each entry identified as practice, personal, academic, demo, or verified client work.
-4. Any approved testimonials, logos, credentials, and results that may be published.
-5. Reviewed privacy and terms documents suitable for the tools and services actually used.
-6. DNS access for `aadityadahal1.com.np` if the custom domain should be connected to this deployment.
-7. Keep the verified LinkedIn, Facebook, Instagram, and WhatsApp profile links current.
+1. Deploy the site, submit the Contact and Free Consultation forms once, and approve FormSubmit's activation email for `adtiyadahal964@gmail.com`.
+2. Submit a second test through each form after activation and confirm the named fields arrive correctly.
+3. Replace the SEO placeholder with a clean image that Aaditya owns or is licensed to use. The supplied watermarked SEO image is intentionally excluded.
+4. Review and approve the final Privacy Policy and Terms wording for FormSubmit and the business.
+5. Keep the verified LinkedIn, Facebook, Instagram, and WhatsApp profile links current.
 
-There is no analytics service, conversion tracking service, booking integration, or form backend configured. Consultation links have a `data-conversion` hook for future tracking. The English/Nepali switch links to real translated static pages and preserves the chosen language while navigating.
+The Contact and Free Consultation forms use FormSubmit’s AJAX endpoint with its default reCAPTCHA and a honeypot field. After FormSubmit accepts a request, each form shows an inline confirmation and lets the visitor send another enquiry without leaving the page. FormSubmit requires one-time email activation before live forwarding works. There is no analytics or conversion tracking service configured.

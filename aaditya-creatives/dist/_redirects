@@ -5,3 +5,4 @@
 /services/meta-ads/* /services/paid-advertising/ 301
 /services/email-marketing/* /services/email-marketing-and-lead-generation/ 301
 /services/lead-generation/* /services/email-marketing-and-lead-generation/ 301
+/projects/* /services/ 301

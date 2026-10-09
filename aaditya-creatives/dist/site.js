@@ -12,8 +12,8 @@ window.addEventListener('resize', updateHeaderOffset, { passive: true });
 const ui = {
   open: 'Open navigation', close: 'Close navigation',
   notProvided: 'Not provided',
-  loading: 'Preparing your message…',
-  consultationLoading: 'Booking Your Consultation…',
+  loading: 'Sending your message…',
+  consultationLoading: 'Sending your consultation request…',
   invalid: 'Please review the highlighted fields and complete the required information.',
   ready: 'Your message is ready to copy. Nothing has been sent or booked yet.',
   consultationReady: 'Thank you! Your consultation request is ready to copy. Nothing has been submitted yet.',
@@ -42,7 +42,13 @@ const initialiseCountryPicker = (picker) => {
     name: displayNames?.of(iso2.toUpperCase()) || iso2.toUpperCase()
   })).sort((a, b) => a.name.localeCompare(b.name));
   let filtered = countries;
-  let selectedIso2 = '';
+  let selectedIso2 = 'np';
+  const defaultCountry = countries.find((country) => country.iso2 === selectedIso2);
+  if (defaultCountry) {
+    hidden.value = defaultCountry.dialCode;
+    selectedLabel.textContent = `${defaultCountry.name} (+${defaultCountry.dialCode})`;
+    trigger.setAttribute('aria-label', `Country calling code: ${defaultCountry.name}, plus ${defaultCountry.dialCode} selected`);
+  }
   const options = () => [...list.querySelectorAll('[role="option"]')];
   const render = (query = '') => {
     const term = query.trim().toLocaleLowerCase();
@@ -80,13 +86,13 @@ const initialiseCountryPicker = (picker) => {
     render();
     requestAnimationFrame(() => search.focus());
   };
-  const choose = (option) => {
+  const choose = (option, userInitiated = true) => {
     selectedIso2 = option.dataset.iso2 || '';
     const country = countries.find((item) => item.iso2 === selectedIso2);
     hidden.value = country?.dialCode || '';
     selectedLabel.textContent = country ? `${country.name} (+${country.dialCode})` : 'Select code';
     trigger.setAttribute('aria-label', country ? `Country calling code: ${country.name}, plus ${country.dialCode} selected` : 'Select country calling code');
-    phoneStep?.toggleAttribute('data-phone-touched', Boolean(country));
+    phoneStep?.toggleAttribute('data-phone-touched', userInitiated && Boolean(country));
     status.textContent = country ? `${country.name}, plus ${country.dialCode}, selected.` : 'Country calling code cleared.';
     hidden.dispatchEvent(new Event('input', { bubbles: true }));
     render(search.value);
@@ -131,6 +137,17 @@ const initialiseCountryPicker = (picker) => {
   document.addEventListener('pointerdown', (event) => {
     if (!popover.hidden && !picker.contains(event.target)) close();
   });
+  picker.addEventListener('country-picker-reset', () => {
+    selectedIso2 = 'np';
+    const country = countries.find((item) => item.iso2 === selectedIso2);
+    hidden.value = country?.dialCode || '';
+    selectedLabel.textContent = country ? `${country.name} (+${country.dialCode})` : 'Select code';
+    trigger.setAttribute('aria-label', country ? `Country calling code: ${country.name}, plus ${country.dialCode} selected` : 'Select country calling code');
+    phoneStep?.removeAttribute('data-phone-touched');
+    search.value = '';
+    render();
+    close();
+  });
   render();
 };
 document.querySelectorAll('[data-country-picker]').forEach(initialiseCountryPicker);
@@ -155,6 +172,7 @@ const closeDropdown = (dropdown, restoreFocus = false) => {
   const menu = dropdown?.querySelector('.nav-dropdown-menu');
   if (!dropdown || !trigger) return;
   dropdown.classList.remove('is-open');
+  delete dropdown.dataset.clickOpen;
   trigger.setAttribute('aria-expanded', 'false');
   if (menu) {
     menu.inert = true;
@@ -186,8 +204,13 @@ dropdowns.forEach((dropdown) => {
   const trigger = dropdown.querySelector('.nav-dropdown-trigger');
   closeDropdown(dropdown);
   trigger?.addEventListener('click', () => {
-    const shouldOpen = trigger.getAttribute('aria-expanded') !== 'true';
-    shouldOpen ? openDropdown(dropdown) : closeDropdown(dropdown);
+    const shouldOpen = dropdown.dataset.clickOpen !== 'true';
+    if (shouldOpen) {
+      openDropdown(dropdown);
+      dropdown.dataset.clickOpen = 'true';
+    } else {
+      closeDropdown(dropdown);
+    }
   });
   dropdown.addEventListener('pointerenter', (event) => {
     if (!mobileNav.matches && event.pointerType !== 'touch') openDropdown(dropdown);
@@ -264,13 +287,25 @@ if (themeToggle) {
   });
 }
 
-document.querySelectorAll('[data-copy-form]').forEach((form) => {
-  const isConsultation = form.dataset.copyForm === 'consultation';
-  const prepared = form.querySelector('.prepared-message');
-  const output = prepared?.querySelector('textarea');
+document.querySelectorAll('[data-submit-form]').forEach((form) => {
+  const isConsultation = form.dataset.submitForm === 'consultation';
+  const formContent = form.querySelector('[data-form-content]');
+  const successSection = form.querySelector('[data-form-success]');
+  const successMessage = form.querySelector('[data-success-message]');
+  const resetButton = form.querySelector('[data-form-reset]');
   const formStatus = form.querySelector('[data-form-status]');
-  const copyStatus = prepared?.querySelector('[data-copy-status]');
   const submitButton = form.querySelector('button[type="submit"]');
+  const submitLabel = submitButton?.querySelector('.consultation-action-label, .button-label') || submitButton;
+  const defaultSubmitLabel = submitLabel?.textContent || '';
+  const resetSubmission = (message = '') => {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.removeAttribute('aria-busy');
+    }
+    if (submitLabel) submitLabel.textContent = defaultSubmitLabel;
+    if (formStatus && message) formStatus.textContent = message;
+  };
+  window.addEventListener('pageshow', () => resetSubmission());
   const value = (data, key) => String(data.get(key) || '').trim() || ui.notProvided;
   const selected = (name) => {
     const option = form.elements[name]?.selectedOptions?.[0];
@@ -285,7 +320,7 @@ document.querySelectorAll('[data-copy-form]').forEach((form) => {
     if (target) target.textContent = message;
     if (message) field.setAttribute('aria-invalid', 'true');
     else field.removeAttribute('aria-invalid');
-    if (field?.name === 'phone_whatsapp') {
+    if (field?.name === 'phone_number') {
       const countryTrigger = form.querySelector('.country-code-trigger');
       if (message) countryTrigger?.setAttribute('aria-invalid', 'true');
       else countryTrigger?.removeAttribute('aria-invalid');
@@ -298,14 +333,14 @@ document.querySelectorAll('[data-copy-form]').forEach((form) => {
   const timezoneLabel = isConsultation ? form.querySelector('[data-consultation-timezone]') : null;
   const progressContainer = isConsultation ? form.querySelector('[data-consultation-fields]') : null;
   const progressStatus = isConsultation ? form.querySelector('[data-progress-status]') : null;
-  const phoneField = isConsultation ? form.elements.phone_whatsapp : null;
+  const phoneField = isConsultation ? form.elements.phone_number : null;
   const phoneCodeField = isConsultation ? form.elements.phone_country_code : null;
   const phoneStep = isConsultation ? form.querySelector('[data-phone-step]') : null;
   const phoneIsValid = () => {
     const number = phoneField?.value.trim() || '';
     const code = phoneCodeField?.value.trim() || '';
-    if (!number && !code) return true;
-    if (!number || !code || !/^[\d\s()[\].-]+$/.test(number)) return false;
+    if (!number) return true;
+    if (!code || !/^[+\d\s()[\].-]+$/.test(number)) return false;
     const nationalDigits = number.replace(/\D/g, '').replace(/^0+/, '');
     const combinedDigits = `${code}${nationalDigits}`;
     return nationalDigits.length >= 4 && combinedDigits.length >= 7 && combinedDigits.length <= 15;
@@ -324,12 +359,12 @@ document.querySelectorAll('[data-copy-form]').forEach((form) => {
     const show = challengeField.value === 'Other';
     otherChallengeWrap.hidden = !show;
     otherChallengeField.disabled = !show;
-    otherChallengeField.required = show;
+    otherChallengeField.required = false;
     if (!show) setFieldError(otherChallengeField);
   };
   const progressFieldIsValid = (field) => {
     const text = field.value.trim();
-    if (field.name === 'phone_whatsapp') return phoneIsValid();
+    if (field.name === 'phone_number') return phoneIsValid();
     if (!text) return !field.required;
     if (field.name === 'email') return !field.validity.typeMismatch;
     if (field.name === 'full_name' || field.name === 'business_name') return text.length >= 2;
@@ -343,7 +378,7 @@ document.querySelectorAll('[data-copy-form]').forEach((form) => {
     let requiredTotal = 0;
     let requiredComplete = 0;
     steps.forEach((step) => {
-      const field = step.querySelector('[data-progress-field], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])');
+      const field = step.querySelector('[data-progress-field]') || step.querySelector('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])');
       if (!field) return;
       const hasValue = Boolean(field.value.trim());
       const valid = progressFieldIsValid(field);
@@ -380,8 +415,8 @@ document.querySelectorAll('[data-copy-form]').forEach((form) => {
     form.addEventListener('focusout', () => requestAnimationFrame(updateProgress));
   }
 
-  const validateConsultation = () => {
-    const fields = [...form.querySelectorAll('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])')];
+  const validateForm = () => {
+    const fields = [...form.querySelectorAll('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])')].filter((field) => field.form === form);
     let firstInvalid = null;
     fields.forEach((field) => {
       const text = field.value.trim();
@@ -389,22 +424,24 @@ document.querySelectorAll('[data-copy-form]').forEach((form) => {
       if (field.required && !text) {
         message = {
           full_name: 'Enter your full name.',
-          business_name: 'Enter your business or company name.',
           email: 'Enter your email address.',
-          marketing_challenge: 'Select your biggest marketing challenge.',
-          other_challenge: 'Describe your marketing challenge.',
-          main_goal: 'Describe your main marketing goal.'
+          enquiry_type: 'Select an enquiry type.',
+          message: 'Enter your message.'
         }[field.name] || 'Complete this required field.';
       } else if (field.name === 'email' && field.validity.typeMismatch) {
         message = 'Enter a valid email address.';
-      } else if (field.name === 'phone_whatsapp' && (text || phoneCodeField?.value || phoneStep?.hasAttribute('data-phone-touched')) && !phoneIsValid()) {
+      } else if (field.name === 'phone_number' && text && !phoneIsValid()) {
         message = 'Enter a valid phone number or leave this optional field empty.';
       } else if (field.name === 'full_name' && text.length < 2) {
         message = 'Enter your full name.';
-      } else if (field.name === 'business_name' && text.length < 2) {
+      } else if (field.name === 'business_name' && text && text.length < 2) {
         message = 'Enter your business or company name.';
-      } else if (field.name === 'main_goal' && text.length < 10) {
+      } else if (field.name === 'business_description' && text && text.length < 10) {
+        message = 'Please share a little more about what your business does.';
+      } else if (field.name === 'main_goal' && text && text.length < 10) {
         message = 'Please share a little more about your main goal.';
+      } else if (field.name === 'message' && text && text.length < 10) {
+        message = 'Please share a little more detail in your message.';
       } else if (field.name === 'preferred_date' && text && text < localDate()) {
         message = 'Choose today or a future date.';
       }
@@ -420,82 +457,80 @@ document.querySelectorAll('[data-copy-form]').forEach((form) => {
   };
 
   form.addEventListener('input', (event) => {
-    if (prepared) prepared.hidden = true;
     if (formStatus) formStatus.textContent = '';
-    if (copyStatus) copyStatus.textContent = '';
-    if (isConsultation && event.target.matches('input, select, textarea')) {
+    if (event.target.matches('input, select, textarea')) {
       if (event.target === phoneField) phoneStep?.setAttribute('data-phone-touched', '');
       setFieldError(event.target);
-      updateProgress();
+      if (isConsultation) updateProgress();
     }
   });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (submitButton?.getAttribute('aria-busy') === 'true') return;
-    if (isConsultation ? !validateConsultation() : !form.checkValidity()) {
-      if (formStatus) formStatus.textContent = ui.invalid;
-      if (!isConsultation) form.reportValidity();
+    if (submitButton?.getAttribute('aria-busy') === 'true') {
       return;
     }
-    if (!prepared || !output || !formStatus || !submitButton) return;
-    const submitLabel = submitButton.querySelector('.consultation-action-label, .button-label');
-    const originalButtonText = submitLabel?.textContent || submitButton.textContent;
-    submitButton.disabled = true;
-    submitButton.setAttribute('aria-busy', 'true');
-    if (submitLabel) submitLabel.textContent = isConsultation ? ui.consultationLoading : ui.loading;
-    else submitButton.textContent = isConsultation ? ui.consultationLoading : ui.loading;
-    formStatus.textContent = isConsultation ? ui.consultationLoading : ui.loading;
+    const valid = validateForm();
+    if (!valid) {
+      if (formStatus) formStatus.textContent = ui.invalid;
+      return;
+    }
+    if (!navigator.onLine) {
+      resetSubmission('Your request could not be submitted. Please check your connection and try again.');
+      return;
+    }
+    const submissionTimeField = form.querySelector('[data-submission-time]');
+    if (submissionTimeField) submissionTimeField.value = new Date().toISOString();
+    const sourceUrlField = form.querySelector('[data-source-url]');
+    const sourcePageField = form.elements.source_page;
+    if (sourceUrlField) sourceUrlField.value = location.href;
+    if (sourcePageField) sourcePageField.value = location.href;
+    if (isConsultation) {
+      const timezoneField = form.elements.timezone;
+      const formattedPhoneField = form.elements.phone_with_country_code;
+      if (timezoneField) timezoneField.value = Intl.DateTimeFormat().resolvedOptions().timeZone || ui.notProvided;
+      if (formattedPhoneField) formattedPhoneField.value = formattedPhone();
+    }
+    if (formStatus) formStatus.textContent = isConsultation ? ui.consultationLoading : ui.loading;
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.setAttribute('aria-busy', 'true');
+    }
+    if (submitLabel) submitLabel.textContent = isConsultation ? 'Sending Request…' : 'Sending Message…';
     try {
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-      const data = new FormData(form);
-      if (isConsultation) {
-        output.value = [
-          'Free consultation request', '',
-          `Full name: ${value(data, 'full_name')}`,
-          `Business / company: ${value(data, 'business_name')}`,
-          `Email: ${value(data, 'email')}`,
-          `Phone / WhatsApp: ${formattedPhone()}`,
-          `Website / social media: ${value(data, 'website_social')}`,
-          `Main marketing challenge: ${selected('marketing_challenge')}`,
-          ...(data.get('marketing_challenge') === 'Other' ? [`Challenge details: ${value(data, 'other_challenge')}`] : []),
-          '', 'Main goal:', value(data, 'main_goal'),
-          '', 'Anything else:', value(data, 'additional_info'),
-          `Preferred date: ${value(data, 'preferred_date')}`,
-          `Preferred time: ${selected('preferred_time')}`,
-          `Time zone: ${Intl.DateTimeFormat().resolvedOptions().timeZone || ui.notProvided}`
-        ].join('\n');
-      } else {
-        output.value = [
-          'Website enquiry', '',
-          `Name: ${value(data, 'name')}`,
-          `Email: ${value(data, 'email')}`,
-          `Subject: ${selected('subject')}`, '',
-          'Message:', value(data, 'message')
-        ].join('\n');
+      const response = await fetch(form.action, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body: new FormData(form)
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.success === false || payload.success === 'false') throw new Error('FormSubmit rejected the request.');
+      if (formContent) formContent.hidden = true;
+      if (successMessage) successMessage.textContent = isConsultation
+        ? 'Thank you! Your consultation request has been received. I’ll review your information and contact you soon.'
+        : 'Thank you! Your message has been received. I’ll contact you soon.';
+      if (successSection) {
+        successSection.hidden = false;
+        successSection.focus();
       }
-      prepared.hidden = false;
-      formStatus.textContent = isConsultation ? ui.consultationReady : ui.ready;
-      output.focus();
-      output.select();
+      if (formStatus) formStatus.replaceChildren();
+      resetSubmission();
     } catch {
-      formStatus.textContent = isConsultation ? ui.consultationError : ui.error;
-    } finally {
-      submitButton.disabled = false;
-      submitButton.removeAttribute('aria-busy');
-      if (submitLabel) submitLabel.textContent = originalButtonText;
-      else submitButton.textContent = originalButtonText;
+      resetSubmission('Your request could not be submitted. Please check your connection and try again.');
     }
   });
-  prepared?.querySelector('[data-copy-button]')?.addEventListener('click', async () => {
-    if (!output || !copyStatus) return;
-    try {
-      await navigator.clipboard.writeText(output.value);
-      copyStatus.textContent = ui.copied;
-    } catch {
-      output.focus();
-      output.select();
-      copyStatus.textContent = ui.select;
-    }
+
+  resetButton?.addEventListener('click', () => {
+    form.reset();
+    form.querySelectorAll('[aria-invalid="true"]').forEach((field) => field.removeAttribute('aria-invalid'));
+    form.querySelectorAll('.field-error').forEach((error) => error.replaceChildren());
+    form.querySelectorAll('[data-country-picker]').forEach((picker) => picker.dispatchEvent(new Event('country-picker-reset')));
+    if (formStatus) formStatus.replaceChildren();
+    if (successSection) successSection.hidden = true;
+    if (formContent) formContent.hidden = false;
+    updateOtherChallenge();
+    updateProgress();
+    resetSubmission();
+    form.querySelector('input:not([type="hidden"]), select, textarea')?.focus();
   });
 });
 
@@ -510,3 +545,35 @@ if (consultationCard) {
     consultationCard.classList.add('is-shimmering');
   }
 }
+
+const revealMedia = [...document.querySelectorAll('[data-reveal-media]')];
+if (revealMedia.length) {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion || !('IntersectionObserver' in window)) {
+    revealMedia.forEach((media) => media.classList.add('is-visible'));
+  } else {
+    revealMedia.forEach((media) => media.classList.add('media-reveal-pending'));
+    const mediaObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    revealMedia.forEach((media) => mediaObserver.observe(media));
+  }
+}
+
+document.querySelectorAll('.service-accordion-trigger').forEach((trigger) => {
+  const panelId = trigger.getAttribute('aria-controls');
+  const panel = panelId ? document.getElementById(panelId) : null;
+  const item = trigger.closest('.service-accordion-item');
+  if (!panel || !item) return;
+
+  trigger.addEventListener('click', () => {
+    const open = trigger.getAttribute('aria-expanded') === 'true';
+    trigger.setAttribute('aria-expanded', String(!open));
+    panel.setAttribute('aria-hidden', String(open));
+    item.classList.toggle('is-open', !open);
+  });
+});
