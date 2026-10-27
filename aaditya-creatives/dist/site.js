@@ -269,20 +269,21 @@ const themeToggle = document.querySelector('[data-theme-toggle]');
 if (themeToggle) {
   const root = document.documentElement;
   const meta = document.querySelector('meta[name="theme-color"]');
-  const isLight = () => root.dataset.theme === 'light';
+  if (root.dataset.theme === 'mixed') root.dataset.theme = 'light';
+  const isDark = () => root.dataset.theme === 'dark';
   const syncThemeControl = () => {
-    const light = isLight();
+    const dark = isDark();
     themeToggle.querySelector('.theme-moon path')?.setAttribute('d', 'M20.2 15.4A8.4 8.4 0 0 1 8.6 3.8 8.6 8.6 0 1 0 20.2 15.4Z');
-    const label = light ? 'Switch to dark theme' : 'Switch to light theme';
+    const label = dark ? 'Switch to light theme' : 'Switch to dark theme';
     themeToggle.setAttribute('aria-label', label);
-    themeToggle.setAttribute('aria-pressed', String(light));
+    themeToggle.setAttribute('aria-pressed', String(dark));
     themeToggle.querySelector('.sr-only')?.replaceChildren(document.createTextNode(label));
-    if (meta) meta.content = light ? '#FEF2A0' : '#070A0F';
+    if (meta) meta.content = dark ? '#101211' : '#F7F9FC';
   };
   syncThemeControl();
   themeToggle.addEventListener('click', () => {
-    root.dataset.theme = isLight() ? 'dark' : 'light';
-    try { localStorage.setItem('aaditya-theme', root.dataset.theme); } catch {}
+    root.dataset.theme = isDark() ? 'light' : 'dark';
+    try { localStorage.setItem('aaditya-theme-v2', root.dataset.theme); } catch {}
     syncThemeControl();
   });
 }
@@ -359,7 +360,8 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
     const show = challengeField.value === 'Other';
     otherChallengeWrap.hidden = !show;
     otherChallengeField.disabled = !show;
-    otherChallengeField.required = false;
+    otherChallengeField.required = show;
+    challengeField.setAttribute('aria-expanded', String(show));
     if (!show) setFieldError(otherChallengeField);
   };
   const progressFieldIsValid = (field) => {
@@ -368,7 +370,7 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
     if (!text) return !field.required;
     if (field.name === 'email') return !field.validity.typeMismatch;
     if (field.name === 'full_name' || field.name === 'business_name') return text.length >= 2;
-    if (field.name === 'main_goal') return text.length >= 10;
+    if (field.name === 'main_goal') return true;
     if (field.name === 'preferred_date') return text >= localDate();
     return field.checkValidity();
   };
@@ -425,6 +427,9 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
         message = {
           full_name: 'Enter your full name.',
           email: 'Enter your email address.',
+          marketing_challenge: 'Select your biggest marketing challenge.',
+          other_challenge: 'Describe your marketing challenge.',
+          preferred_time: 'Select your preferred consultation time.',
           enquiry_type: 'Select an enquiry type.',
           message: 'Enter your message.'
         }[field.name] || 'Complete this required field.';
@@ -438,8 +443,6 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
         message = 'Enter your business or company name.';
       } else if (field.name === 'business_description' && text && text.length < 10) {
         message = 'Please share a little more about what your business does.';
-      } else if (field.name === 'main_goal' && text && text.length < 10) {
-        message = 'Please share a little more about your main goal.';
       } else if (field.name === 'message' && text && text.length < 10) {
         message = 'Please share a little more detail in your message.';
       } else if (field.name === 'preferred_date' && text && text < localDate()) {

@@ -5,50 +5,45 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectDirectory = $PSScriptRoot
 $previewUrl = "http://127.0.0.1:$Port/"
+$hostScript = Join-Path $projectDirectory 'preview-host.ps1'
+$taskName = 'Aaditya Creatives Local Preview'
 
 Push-Location $projectDirectory
 try {
   node build.mjs
 
-  $ready = $false
   try {
-    $existingResponse = Invoke-WebRequest -Uri $previewUrl -UseBasicParsing -TimeoutSec 2
-    $ready = $existingResponse.StatusCode -eq 200 -and $existingResponse.Content.Contains('Aaditya Creatives')
+    $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if (-not $task) {
+      $powerShell = (Get-Command powershell.exe).Source
+      $arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$hostScript`" -Port $Port"
+      $action = New-ScheduledTaskAction -Execute $powerShell -Argument $arguments -WorkingDirectory $projectDirectory
+      $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+      $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+      $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
+      Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description 'Keeps the Aaditya Creatives local preview available at 127.0.0.1:4173.' | Out-Null
+      $task = Get-ScheduledTask -TaskName $taskName
+    }
   } catch {
-    $ready = $false
+    Write-Warning "Could not register the sign-in task; the background preview will still start for this session."
+    $task = $null
   }
 
-  if (-not $ready) {
-    $nodePath = (Get-Command node -ErrorAction Stop).Source
-    $outputLog = Join-Path $env:TEMP 'aaditya-creatives-preview.log'
-    $errorLog = Join-Path $env:TEMP 'aaditya-creatives-preview-error.log'
-
-    Start-Process `
-      -FilePath $nodePath `
-      -ArgumentList 'server.mjs' `
-      -WorkingDirectory $projectDirectory `
-      -WindowStyle Hidden `
-      -RedirectStandardOutput $outputLog `
-      -RedirectStandardError $errorLog | Out-Null
-  }
-
-  for ($attempt = 0; $attempt -lt 20; $attempt++) {
-    try {
-      $response = Invoke-WebRequest -Uri $previewUrl -UseBasicParsing -TimeoutSec 2
-      if ($response.StatusCode -eq 200 -and $response.Content.Contains('Aaditya Creatives')) {
-        $ready = $true
-        break
-      }
-    } catch {
-      Start-Sleep -Milliseconds 250
+  $listener = netstat -ano | Select-String "127\.0\.0\.1:$Port\s+.*LISTENING"
+  if (-not $listener) {
+    if ($task) {
+      Start-ScheduledTask -TaskName $taskName
+    } else {
+      Start-Process `
+        -FilePath 'powershell.exe' `
+        -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',"`"$hostScript`"",'-Port',[string]$Port) `
+        -WorkingDirectory $projectDirectory `
+        -WindowStyle Hidden | Out-Null
     }
   }
 
-  if (-not $ready) {
-    throw "The preview server did not become available at $previewUrl. Check $errorLog for details."
-  }
-
-  Write-Output "Preview ready: $previewUrl"
+  Write-Output "Preview starting: $previewUrl"
+  Write-Output "The persistent Windows sign-in task keeps this server available after Codex closes."
 } finally {
   Pop-Location
 }
