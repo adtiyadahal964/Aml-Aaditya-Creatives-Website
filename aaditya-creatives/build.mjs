@@ -427,14 +427,13 @@ const facebookAdsArticlePage = page({
   </div></div></article>`
 });
 
-const formSubmitEndpoint = 'https://formsubmit.co/adtiyadahal964@gmail.com';
-const formSubmitAjaxEndpoint = 'https://formsubmit.co/ajax/adtiyadahal964@gmail.com';
+const formEndpoint = '/api/submit-form';
 const productionOrigin = 'https://aadityadahal1.com.np';
-const formSubmitFields = (subject, sourcePath, submissionType) => `<input type="hidden" name="_subject" value="${subject}"><input type="hidden" name="_template" value="table"><input type="hidden" name="_next" value="${productionOrigin}/thank-you/?type=${submissionType}"><input type="hidden" name="_url" value="${productionOrigin}${sourcePath}" data-source-url><input type="hidden" name="source_page" value="${productionOrigin}${sourcePath}"><input type="hidden" name="submission_date_time" value="" data-submission-time><input type="text" name="_honey" tabindex="-1" autocomplete="off" class="form-honeypot" aria-hidden="true">`;
+const formBackendFields = (sourcePath, formType) => `<input type="hidden" name="form_type" value="${formType}"><input type="hidden" name="submission_id" value=""><input type="hidden" name="source_page" value="${productionOrigin}${sourcePath}" data-source-url><input type="hidden" name="submission_date_time" value="" data-submission-time><input type="text" name="_honey" tabindex="-1" autocomplete="off" class="form-honeypot" aria-hidden="true">`;
 const formFallback = (subject) => `<p class="form-fallback" data-form-fallback hidden>The form service is temporarily unavailable. Your information is still here. <a href="mailto:adtiyadahal964@gmail.com?subject=${encodeURIComponent(subject)}">Email Aaditya directly</a> or try again shortly.</p>`;
 
-const inquiryForm = (kind) => `<form class="inquiry-form" data-submit-form="${kind}" data-ajax-action="${formSubmitAjaxEndpoint}" action="${formSubmitEndpoint}" method="POST" novalidate>
-  ${formSubmitFields('New Contact Message — Aaditya Creatives','/contact/','contact')}
+const inquiryForm = (kind) => `<form class="inquiry-form" data-submit-form="${kind}" data-ajax-action="${formEndpoint}" action="${formEndpoint}" method="POST" novalidate>
+  ${formBackendFields('/contact/','contact')}
   <div data-form-content>
   <p class="required-help">Fields marked <span aria-hidden="true">*</span> are required.</p>
   <div class="field-row">
@@ -451,8 +450,8 @@ const inquiryForm = (kind) => `<form class="inquiry-form" data-submit-form="${ki
   <section class="form-success" data-form-success hidden tabindex="-1" role="status" aria-live="polite"><p data-success-message></p><button class="button button-secondary" type="button" data-form-reset>Send Another Enquiry</button></section>
 </form>`;
 
-const consultationForm = () => `<form class="inquiry-form consultation-form" data-submit-form="consultation" data-ajax-action="${formSubmitAjaxEndpoint}" action="${formSubmitEndpoint}" method="POST" novalidate>
-  ${formSubmitFields('New Free Consultation Request — Aaditya Creatives','/consultation/','consultation')}
+const consultationForm = () => `<form class="inquiry-form consultation-form" data-submit-form="consultation" data-ajax-action="${formEndpoint}" action="${formEndpoint}" method="POST" novalidate>
+  ${formBackendFields('/consultation/','consultation')}
   <input type="hidden" name="timezone" value="">
   <input type="hidden" name="phone_with_country_code" value="">
   <div data-form-content>
@@ -704,9 +703,9 @@ const thankYou = page({
 });
 
 function legalPlaceholder(type, details) {
-  return page({title:`${type} Placeholder | Aaditya Creatives`,description:`Aaditya Creatives ${type.toLowerCase()} page placeholder. Final information will be reviewed before publication.`,body:`${innerHero(`${type.toUpperCase()} / PLACEHOLDER`, `${type} information is <em>being prepared.</em>`, `${details} This page is a clearly marked placeholder and is not a finalized legal document.`)}<section class="section"><div class="shell legal-box"><span class="eyebrow">TO BE COMPLETED</span><h2>Information that needs final review</h2><p>The contact and consultation forms send the information entered by visitors through FormSubmit to Aaditya Creatives for the purpose of responding to enquiries and consultation requests. Aaditya still needs to confirm the relevant business details and approve the final legal wording.</p><a class="underlined-link" href="/contact/">Return to contact</a></div></section>`});
+  return page({title:`${type} Placeholder | Aaditya Creatives`,description:`Aaditya Creatives ${type.toLowerCase()} page placeholder. Final information will be reviewed before publication.`,body:`${innerHero(`${type.toUpperCase()} / PLACEHOLDER`, `${type} information is <em>being prepared.</em>`, `${details} This page is a clearly marked placeholder and is not a finalized legal document.`)}<section class="section"><div class="shell legal-box"><span class="eyebrow">TO BE COMPLETED</span><h2>Information that needs final review</h2><p>The contact and consultation forms send the information entered by visitors through a Vercel-hosted form endpoint and Resend to Aaditya Creatives for the purpose of responding to enquiries and consultation requests. Aaditya still needs to confirm the relevant business details and approve the final legal wording.</p><a class="underlined-link" href="/contact/">Return to contact</a></div></section>`});
 }
-const privacy = legalPlaceholder('Privacy Policy','The final policy will explain what information the forms collect, how it is used to respond, and that FormSubmit processes submitted information for email delivery.');
+const privacy = legalPlaceholder('Privacy Policy','The final policy will explain what information the forms collect, how it is used to respond, and that Vercel and Resend process submitted information for email delivery.');
 const terms = legalPlaceholder('Terms','The terms will describe how the website and any future services are offered once Aaditya confirms the relevant business details.');
 
 async function writeRoute(route, html) {

@@ -608,6 +608,11 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
   form.addEventListener('input', (event) => {
     if (formStatus) formStatus.textContent = '';
     if (formFallback) formFallback.hidden = true;
+    if (form.dataset.submissionFailed === 'true' && event.target.matches('input, select, textarea')) {
+      const submissionIdField = form.elements.submission_id;
+      if (submissionIdField) submissionIdField.value = '';
+      delete form.dataset.submissionFailed;
+    }
     if (event.target.matches('input, select, textarea')) {
       if (event.target === phoneField) phoneStep?.setAttribute('data-phone-touched', '');
       setFieldError(event.target);
@@ -630,6 +635,11 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
     }
     const submissionTimeField = form.querySelector('[data-submission-time]');
     if (submissionTimeField) submissionTimeField.value = new Date().toISOString();
+    const submissionIdField = form.elements.submission_id;
+    if (submissionIdField && !submissionIdField.value) {
+      submissionIdField.value = globalThis.crypto?.randomUUID?.()
+        || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
     const sourceUrlField = form.querySelector('[data-source-url]');
     const sourcePageField = form.elements.source_page;
     if (sourceUrlField) sourceUrlField.value = location.href;
@@ -677,14 +687,15 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
         }
       };
       let response = await submitRequest();
-      if (response.status === 429 || response.status >= 500) {
+      if (response.status >= 500) {
         await new Promise((resolve) => window.setTimeout(resolve, 1000));
         response = await submitRequest();
       }
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok || payload.success === false || payload.success === 'false') {
-        const error = new Error('FormSubmit rejected the request.');
+      if (!response.ok || payload.success !== true) {
+        const error = new Error('The form API rejected the request.');
         error.status = response.status;
+        error.code = typeof payload.code === 'string' ? payload.code : '';
         error.providerMessage = typeof payload.message === 'string' ? payload.message : '';
         throw error;
       }
@@ -697,16 +708,18 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
         successSection.focus();
       }
       if (formStatus) formStatus.replaceChildren();
+      delete form.dataset.submissionFailed;
       resetSubmission();
     } catch (error) {
       const serviceUnavailable = error?.name === 'AbortError' || error?.status === 429 || error?.status >= 500;
-      const activationRequired = /activat|confirm/i.test(error?.providerMessage || '');
-      const message = activationRequired
-        ? 'This form needs one-time email confirmation before it can receive requests. Please email Aaditya directly for now.'
+      const configurationMissing = error?.code === 'configuration_error';
+      const message = configurationMissing
+        ? 'Email delivery is not configured yet. Your information is still here—please email Aaditya directly.'
         : serviceUnavailable
           ? 'The form service is temporarily unavailable. Your information is still here—please try again shortly or email Aaditya directly.'
-          : 'Your request could not be submitted. Your information is still here—please try again or email Aaditya directly.';
+          : error?.providerMessage || 'Your request could not be submitted. Your information is still here—please try again or email Aaditya directly.';
       if (formFallback) formFallback.hidden = false;
+      form.dataset.submissionFailed = 'true';
       resetSubmission(message);
     }
   });
@@ -718,6 +731,7 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
     form.querySelectorAll('[data-country-picker]').forEach((picker) => picker.dispatchEvent(new Event('country-picker-reset')));
     if (formStatus) formStatus.replaceChildren();
     if (formFallback) formFallback.hidden = true;
+    delete form.dataset.submissionFailed;
     if (successSection) successSection.hidden = true;
     if (formContent) formContent.hidden = false;
     updateOtherChallenge();

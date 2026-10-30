@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test tests/form-api.test.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,1 +1,6 @@
 redesign-site.py
+.env
+.env.*
+!.env.example
+.vercel/
+node_modules/
