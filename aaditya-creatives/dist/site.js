@@ -472,51 +472,21 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
       else countryTrigger?.removeAttribute('aria-invalid');
     }
   };
-  const challengeField = isConsultation ? form.elements.marketing_challenge : null;
-  const otherChallengeWrap = isConsultation ? form.querySelector('[data-other-challenge]') : null;
-  const otherChallengeField = isConsultation ? form.elements.other_challenge : null;
-  const dateField = isConsultation ? form.elements.preferred_date : null;
-  const timezoneLabel = isConsultation ? form.querySelector('[data-consultation-timezone]') : null;
   const progressContainer = isConsultation ? form.querySelector('[data-consultation-fields]') : null;
   const progressStatus = isConsultation ? form.querySelector('[data-progress-status]') : null;
   const phoneField = isConsultation ? form.elements.phone_number : null;
-  const phoneCodeField = isConsultation ? form.elements.phone_country_code : null;
-  const phoneStep = isConsultation ? form.querySelector('[data-phone-step]') : null;
   const phoneIsValid = () => {
     const number = phoneField?.value.trim() || '';
-    const code = phoneCodeField?.value.trim() || '';
-    if (!number) return true;
-    if (!code || !/^[+\d\s()[\].-]+$/.test(number)) return false;
-    const nationalDigits = number.replace(/\D/g, '').replace(/^0+/, '');
-    const combinedDigits = `${code}${nationalDigits}`;
-    return nationalDigits.length >= 4 && combinedDigits.length >= 7 && combinedDigits.length <= 15;
-  };
-  const formattedPhone = () => {
-    if (!phoneField?.value.trim() || !phoneCodeField?.value.trim() || !phoneIsValid()) return ui.notProvided;
-    return `+${phoneCodeField.value.trim()}${phoneField.value.replace(/\D/g, '').replace(/^0+/, '')}`;
-  };
-  const localDate = () => {
-    const now = new Date();
-    const offset = now.getTimezoneOffset() * 60000;
-    return new Date(now.getTime() - offset).toISOString().slice(0, 10);
-  };
-  const updateOtherChallenge = () => {
-    if (!otherChallengeWrap || !otherChallengeField || !challengeField) return;
-    const show = challengeField.value === 'Other';
-    otherChallengeWrap.hidden = !show;
-    otherChallengeField.disabled = !show;
-    otherChallengeField.required = show;
-    challengeField.setAttribute('aria-expanded', String(show));
-    if (!show) setFieldError(otherChallengeField);
+    if (!number || !/^[+\d\s()[\].-]+$/.test(number)) return false;
+    const digits = number.replace(/\D/g, '');
+    return digits.length >= 7 && digits.length <= 15;
   };
   const progressFieldIsValid = (field) => {
     const text = field.value.trim();
     if (field.name === 'phone_number') return phoneIsValid();
     if (!text) return !field.required;
-    if (field.name === 'email') return !field.validity.typeMismatch;
+    if (field.name === 'email' || field.name === 'website_social') return !field.validity.typeMismatch;
     if (field.name === 'full_name' || field.name === 'business_name') return text.length >= 2;
-    if (field.name === 'main_goal') return true;
-    if (field.name === 'preferred_date') return text >= localDate();
     return field.checkValidity();
   };
   const updateProgress = () => {
@@ -546,17 +516,7 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
       progressStatus.textContent = `${requiredComplete} of ${requiredTotal} required fields complete.${suffix}`;
     }
   };
-  if (dateField) dateField.min = localDate();
-  if (timezoneLabel) {
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    timezoneLabel.textContent = `Time zone: ${timezone || 'your local time'}`;
-  }
-  updateOtherChallenge();
   updateProgress();
-  challengeField?.addEventListener('change', () => {
-    updateOtherChallenge();
-    updateProgress();
-  });
   if (isConsultation) {
     form.addEventListener('focusin', updateProgress);
     form.addEventListener('focusout', () => requestAnimationFrame(updateProgress));
@@ -571,17 +531,18 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
       if (field.required && !text) {
         message = {
           full_name: 'Enter your full name.',
+          business_name: 'Enter your business name.',
           email: 'Enter your email address.',
-          marketing_challenge: 'Select your biggest marketing challenge.',
-          other_challenge: 'Describe your marketing challenge.',
-          preferred_time: 'Select your preferred consultation time.',
+          phone_number: 'Enter your phone or WhatsApp number.',
           enquiry_type: 'Select an enquiry type.',
           message: 'Enter your message.'
         }[field.name] || 'Complete this required field.';
       } else if (field.name === 'email' && field.validity.typeMismatch) {
         message = 'Enter a valid email address.';
-      } else if (field.name === 'phone_number' && text && !phoneIsValid()) {
-        message = 'Enter a valid phone number or leave this optional field empty.';
+      } else if (field.name === 'website_social' && text && field.validity.typeMismatch) {
+        message = 'Enter a complete link beginning with https://';
+      } else if (field.name === 'phone_number' && !phoneIsValid()) {
+        message = 'Enter a valid phone or WhatsApp number with country code.';
       } else if (field.name === 'full_name' && text.length < 2) {
         message = 'Enter your full name.';
       } else if (field.name === 'business_name' && text && text.length < 2) {
@@ -614,7 +575,6 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
       delete form.dataset.submissionFailed;
     }
     if (event.target.matches('input, select, textarea')) {
-      if (event.target === phoneField) phoneStep?.setAttribute('data-phone-touched', '');
       setFieldError(event.target);
       if (isConsultation) updateProgress();
     }
@@ -644,12 +604,6 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
     const sourcePageField = form.elements.source_page;
     if (sourceUrlField) sourceUrlField.value = location.href;
     if (sourcePageField) sourcePageField.value = location.href;
-    if (isConsultation) {
-      const timezoneField = form.elements.timezone;
-      const formattedPhoneField = form.elements.phone_with_country_code;
-      if (timezoneField) timezoneField.value = Intl.DateTimeFormat().resolvedOptions().timeZone || ui.notProvided;
-      if (formattedPhoneField) formattedPhoneField.value = formattedPhone();
-    }
     if (formStatus) formStatus.textContent = isConsultation ? ui.consultationLoading : ui.loading;
     if (submitButton) {
       submitButton.disabled = true;
@@ -699,6 +653,11 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
         error.providerMessage = typeof payload.message === 'string' ? payload.message : '';
         throw error;
       }
+      if (isConsultation) {
+        try { sessionStorage.setItem('aaditya-consultation-name', form.elements.full_name.value.trim()); } catch {}
+        location.assign('/thank-you/?type=consultation');
+        return;
+      }
       if (formContent) formContent.hidden = true;
       if (successMessage) successMessage.textContent = isConsultation
         ? 'Thank you! Your consultation request has been received. I’ll review your information and contact you soon.'
@@ -734,12 +693,30 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
     delete form.dataset.submissionFailed;
     if (successSection) successSection.hidden = true;
     if (formContent) formContent.hidden = false;
-    updateOtherChallenge();
     updateProgress();
     resetSubmission();
     form.querySelector('input:not([type="hidden"]), select, textarea')?.focus();
   });
 });
+
+const thankYouHeading = document.querySelector('[data-thank-you-heading]');
+const thankYouMessage = document.querySelector('[data-thank-you-message]');
+if (thankYouHeading && new URLSearchParams(location.search).get('type') === 'consultation') {
+  let visitorName = '';
+  try {
+    visitorName = sessionStorage.getItem('aaditya-consultation-name')?.trim() || '';
+    sessionStorage.removeItem('aaditya-consultation-name');
+  } catch {}
+  if (visitorName) {
+    thankYouHeading.replaceChildren(
+      document.createTextNode(`Thank you, ${visitorName}! `),
+      Object.assign(document.createElement('em'), { textContent: 'Your consultation request has been received successfully.' })
+    );
+  }
+  if (thankYouMessage) {
+    thankYouMessage.textContent = 'I’ll review the business information you shared and contact you using the details provided to discuss your goals and a customized digital marketing direction.';
+  }
+}
 
 const consultationCard = document.querySelector('.consultation-card');
 if (consultationCard) {
@@ -769,6 +746,41 @@ if (revealMedia.length) {
     }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
     revealMedia.forEach((media) => mediaObserver.observe(media));
   }
+}
+
+const revealCards = [...document.querySelectorAll('[data-reveal-card]')];
+if (revealCards.length) {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion || !('IntersectionObserver' in window)) {
+    revealCards.forEach((card) => card.classList.add('is-visible'));
+  } else {
+    revealCards.forEach((card) => card.classList.add('card-reveal-pending'));
+    const cardObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: '0px 0px -6% 0px', threshold: 0.08 });
+    revealCards.forEach((card) => cardObserver.observe(card));
+  }
+}
+
+const readingProgress = document.querySelector('[data-reading-progress] span');
+if (readingProgress) {
+  let progressFrame = 0;
+  const updateReadingProgress = () => {
+    const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = scrollable > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollable)) : 0;
+    readingProgress.style.transform = `scaleX(${progress})`;
+    progressFrame = 0;
+  };
+  const requestProgressUpdate = () => {
+    if (!progressFrame) progressFrame = requestAnimationFrame(updateReadingProgress);
+  };
+  updateReadingProgress();
+  window.addEventListener('scroll', requestProgressUpdate, { passive: true });
+  window.addEventListener('resize', requestProgressUpdate);
 }
 
 document.querySelectorAll('.service-accordion-trigger').forEach((trigger) => {

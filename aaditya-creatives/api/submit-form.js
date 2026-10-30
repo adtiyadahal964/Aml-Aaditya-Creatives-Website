@@ -181,24 +181,24 @@ function buildSubmission(raw) {
   }
 
   const businessName = clean(raw.business_name, 160);
-  const marketingChallenge = clean(raw.marketing_challenge, 200);
-  const otherChallenge = clean(raw.other_challenge, 500);
-  const preferredTime = clean(raw.preferred_time, 120);
-  const phone = clean(raw.phone_with_country_code || raw.phone_number, 30);
-  if (businessName && businessName.length < 2) {
-    throw new FormError('Please provide a valid business name or leave it empty.', 400, 'validation_error');
+  const phone = clean(raw.phone_number, 30);
+  const websiteSocial = clean(raw.website_social, 500);
+  const businessChallenge = clean(raw.business_challenge, 1000);
+  if (businessName.length < 2) {
+    throw new FormError('Please provide a valid business name.', 400, 'validation_error');
   }
-  if (!marketingChallenge || !preferredTime) {
-    throw new FormError('Please select your marketing challenge and preferred consultation time.', 400, 'validation_error');
+  if (!PHONE_PATTERN.test(phone)) {
+    throw new FormError('Please enter a valid phone or WhatsApp number.', 400, 'validation_error');
   }
-  if (marketingChallenge === 'Other' && !otherChallenge) {
-    throw new FormError('Please describe the marketing challenge you want to discuss.', 400, 'validation_error');
-  }
-  if (phone && !PHONE_PATTERN.test(phone)) {
-    throw new FormError('Please enter a valid phone number or leave it empty.', 400, 'validation_error');
+  if (websiteSocial) {
+    try {
+      const website = new URL(websiteSocial);
+      if (!['http:', 'https:'].includes(website.protocol)) throw new Error('Unsupported protocol');
+    } catch {
+      throw new FormError('Please enter a complete website or social media link.', 400, 'validation_error');
+    }
   }
 
-  const challenge = marketingChallenge === 'Other' ? `Other — ${otherChallenge}` : marketingChallenge;
   return {
     formType,
     fullName,
@@ -207,16 +207,11 @@ function buildSubmission(raw) {
     subject: 'New Free Consultation Request — Aaditya Creatives',
     fields: [
       ['Full Name', fullName],
-      ['Email Address', email],
       ['Business Name', businessName],
-      ['Website or Social Media', clean(raw.website_social, 500)],
-      ['Country Code', clean(raw.phone_country_code, 10)],
+      ['Email Address', email],
       ['Phone / WhatsApp Number', phone],
-      ['Biggest Marketing Challenge', challenge],
-      ['Main Business Goal', clean(raw.main_goal, 1000)],
-      ['Preferred Consultation Date', clean(raw.preferred_date, 30)],
-      ['Preferred Consultation Time', preferredTime],
-      ['Timezone', clean(raw.timezone, 120)],
+      ['Website or Social Media Link', websiteSocial],
+      ['Main Business Challenge', businessChallenge],
       ['Source Page', sourcePage],
       ['Submission Date and Time', submittedAt],
       ['Submission ID', submissionId],

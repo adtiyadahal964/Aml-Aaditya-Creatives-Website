@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const handler = require('../api/submit-form.js');
 
@@ -93,7 +93,7 @@ test('sends a valid contact form and confirms Resend acceptance', async () => {
   assert.deepEqual(email.to, ['adtiyadahal964@gmail.com']);
 });
 
-test('sends all useful consultation metadata', async () => {
+test('sends the optimized consultation fields', async () => {
   let email;
   let idempotencyKey;
   global.fetch = async (_url, options) => {
@@ -105,13 +105,8 @@ test('sends all useful consultation metadata', async () => {
     ...baseFields('consultation', '123e4567-e89b-42d3-a456-426614174000'),
     business_name: 'Example Business',
     website_social: 'https://example.com',
-    phone_country_code: '977',
-    phone_with_country_code: '+977 9840000000',
-    marketing_challenge: 'Generating leads',
-    main_goal: 'Build a clearer enquiry process',
-    preferred_date: '2026-11-05',
-    preferred_time: "I'm flexible",
-    timezone: 'Asia/Kathmandu',
+    phone_number: '+977 9840000000',
+    business_challenge: 'Build a clearer enquiry process',
   };
   const res = response();
   await handler(request(fields), res);
@@ -121,7 +116,8 @@ test('sends all useful consultation metadata', async () => {
   assert.equal(idempotencyKey, 'aaditya-consultation-123e4567-e89b-42d3-a456-426614174000');
   assert.match(email.text, /Example Business/);
   assert.match(email.text, /\+977 9840000000/);
-  assert.match(email.text, /Asia\/Kathmandu/);
+  assert.match(email.text, /Build a clearer enquiry process/);
+  assert.doesNotMatch(email.text, /Preferred Consultation|Timezone|Country Code/);
 });
 
 test('rejects invalid submissions before calling Resend', async () => {
@@ -229,14 +225,13 @@ test('supports native URL-encoded submissions and redirects only after acceptanc
   assert.equal(res.getHeader('location'), '/thank-you/?type=contact');
 });
 
-test('requires details when the consultation challenge is Other', async () => {
-  global.fetch = async () => assert.fail('Incomplete Other details must not reach Resend.');
+test('requires the four essential consultation fields', async () => {
+  global.fetch = async () => assert.fail('Incomplete consultation details must not reach Resend.');
   const res = response();
   await handler(request({
     ...baseFields('consultation'),
-    marketing_challenge: 'Other',
-    other_challenge: '',
-    preferred_time: "I'm flexible",
+    business_name: 'Example Business',
+    phone_number: '',
   }), res);
   assert.equal(res.statusCode, 400);
   assert.equal(res.json().code, 'validation_error');
@@ -313,4 +308,60 @@ test('client keeps one ID for automatic retry and clears it after a failed submi
   assert.match(client, /form\.dataset\.submissionFailed === 'true'[\s\S]*submissionIdField\.value = ''/);
   assert.match(client, /form\.dataset\.submissionFailed = 'true'/);
   assert.doesNotMatch(client, /response\.status === 429 \|\| response\.status >= 500/);
+});
+
+test('generated consultation form contains exactly six visible named controls', () => {
+  const html = readFileSync(join(__dirname, '..', 'dist', 'consultation', 'index.html'), 'utf8');
+  const form = html.match(/<form class="inquiry-form consultation-form"[\s\S]*?<\/form>/)?.[0] || '';
+  const visibleNames = [...form.matchAll(/<(?:input|textarea|select)\b[^>]*name="([^"]+)"[^>]*>/g)]
+    .filter((match) => !/type="hidden"/.test(match[0]) && match[1] !== '_honey')
+    .map((match) => match[1]);
+  assert.deepEqual(visibleNames, ['full_name', 'business_name', 'email', 'phone_number', 'website_social', 'business_challenge']);
+  assert.match(form, />Book My Free Consultation</);
+});
+
+test('client redirects consultation only after confirmed API success and preserves failures', () => {
+  const client = readFileSync(join(__dirname, '..', 'dist', 'site.js'), 'utf8');
+  const confirmationCheck = client.indexOf("payload.success !== true");
+  const redirect = client.indexOf("location.assign('/thank-you/?type=consultation')");
+  const failureHandler = client.indexOf('} catch (error) {', redirect);
+  assert.ok(confirmationCheck > -1 && redirect > confirmationCheck);
+  assert.ok(failureHandler > redirect);
+  assert.match(client.slice(confirmationCheck, redirect), /sessionStorage\.setItem\('aaditya-consultation-name'/);
+});
+
+test('generated service pages use the approved six-image mapping', () => {
+  const root = join(__dirname, '..');
+  const home = readFileSync(join(root, 'dist', 'index.html'), 'utf8');
+  const overview = readFileSync(join(root, 'dist', 'services', 'index.html'), 'utf8');
+  const expectedFiles = [
+    'ai-marketing-new.jpg',
+    'paid-advertising-new.jpg',
+    'content-marketing-480.webp',
+    'email-lead-generation-new.jpg',
+    'websites-landing-pages-new.jpg',
+    'seo-new.jpg',
+  ];
+
+  for (const file of expectedFiles) {
+    assert.match(home, new RegExp(file.replace('.', '\\.')));
+    assert.match(overview, new RegExp(file.replace('.', '\\.')));
+    assert.ok(existsSync(join(root, 'dist', 'images', 'services', file)), `${file} should exist`);
+  }
+
+  assert.equal((home.match(/service-showcase-media/g) || []).length, 6);
+  assert.equal((overview.match(/service-overview-media/g) || []).length, 6);
+});
+
+test('generated article pages include the reading-progress enhancement', () => {
+  const root = join(__dirname, '..', 'dist', 'blog');
+  for (const slug of [
+    'why-facebook-ads-may-not-be-getting-results',
+    'how-small-businesses-can-use-ai-in-digital-marketing',
+    'simple-digital-marketing-strategy-small-business',
+  ]) {
+    const html = readFileSync(join(root, slug, 'index.html'), 'utf8');
+    assert.match(html, /data-reading-progress/);
+    assert.match(html, /class="article-reading-progress"[^>]*aria-hidden="true"/);
+  }
 });
