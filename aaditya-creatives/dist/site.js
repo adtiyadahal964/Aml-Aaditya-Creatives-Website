@@ -151,6 +151,150 @@ const initialiseCountryPicker = (picker) => {
   render();
 };
 document.querySelectorAll('[data-country-picker]').forEach(initialiseCountryPicker);
+
+const animatedSelects = new Set();
+const closeAnimatedSelects = (except = null) => animatedSelects.forEach((api) => {
+  if (api !== except) api.close();
+});
+const enhanceSelect = (select) => {
+  if (!(select instanceof HTMLSelectElement) || select.dataset.animatedSelect === 'true') return;
+  select.dataset.animatedSelect = 'true';
+  select.classList.add('animated-select-source');
+  select.tabIndex = -1;
+  select.setAttribute('aria-hidden', 'true');
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'animated-select';
+  select.parentNode.insertBefore(wrapper, select);
+  wrapper.append(select);
+
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'animated-select-trigger';
+  trigger.setAttribute('aria-haspopup', 'listbox');
+  trigger.setAttribute('aria-expanded', 'false');
+  const menuId = `${select.id || select.name}-animated-listbox`;
+  trigger.setAttribute('aria-controls', menuId);
+  const valueLabel = document.createElement('span');
+  valueLabel.className = 'animated-select-value';
+  const chevron = document.createElement('span');
+  chevron.className = 'animated-select-chevron';
+  chevron.setAttribute('aria-hidden', 'true');
+  chevron.innerHTML = '<svg viewBox="0 0 12 8"><path d="m1 1 5 5 5-5"/></svg>';
+  trigger.append(valueLabel, chevron);
+
+  const menu = document.createElement('div');
+  menu.className = 'animated-select-menu';
+  menu.id = menuId;
+  menu.role = 'listbox';
+  menu.tabIndex = -1;
+  menu.setAttribute('aria-hidden', 'true');
+  menu.inert = true;
+  wrapper.append(trigger, menu);
+
+  const optionButtons = [];
+  [...select.options].forEach((nativeOption, index) => {
+    if (!nativeOption.value && nativeOption.disabled) return;
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'animated-select-option';
+    option.tabIndex = -1;
+    option.role = 'option';
+    option.dataset.optionIndex = String(index);
+    option.disabled = nativeOption.disabled;
+    option.setAttribute('aria-disabled', String(nativeOption.disabled));
+    option.innerHTML = `<span>${nativeOption.textContent}</span><span class="animated-select-check" aria-hidden="true">✓</span>`;
+    menu.append(option);
+    optionButtons.push(option);
+  });
+
+  const enabledOptions = () => optionButtons.filter((option) => !option.disabled);
+  const sync = () => {
+    const selected = select.selectedOptions[0];
+    const hasValue = Boolean(select.value);
+    valueLabel.textContent = selected?.textContent || 'Select an option';
+    trigger.classList.toggle('is-placeholder', !hasValue);
+    trigger.setAttribute('aria-invalid', select.getAttribute('aria-invalid') || 'false');
+    optionButtons.forEach((option) => {
+      const selectedOption = Number(option.dataset.optionIndex) === select.selectedIndex;
+      option.setAttribute('aria-selected', String(selectedOption));
+      option.classList.toggle('is-selected', selectedOption);
+    });
+  };
+  const close = (restoreFocus = false) => {
+    wrapper.classList.remove('is-open');
+    trigger.setAttribute('aria-expanded', 'false');
+    menu.setAttribute('aria-hidden', 'true');
+    menu.inert = true;
+    if (restoreFocus) trigger.focus();
+  };
+  const open = () => {
+    closeAnimatedSelects(api);
+    wrapper.classList.add('is-open');
+    trigger.setAttribute('aria-expanded', 'true');
+    menu.setAttribute('aria-hidden', 'false');
+    menu.inert = false;
+    const selected = optionButtons.find((option) => option.getAttribute('aria-selected') === 'true');
+    requestAnimationFrame(() => (selected || enabledOptions()[0])?.focus());
+  };
+  const choose = (option) => {
+    if (!option || option.disabled) return;
+    select.selectedIndex = Number(option.dataset.optionIndex);
+    select.dispatchEvent(new Event('input', { bubbles: true }));
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    sync();
+    close(true);
+  };
+  const move = (current, direction) => {
+    const options = enabledOptions();
+    const index = options.indexOf(current);
+    options[(index + direction + options.length) % options.length]?.focus();
+  };
+  const api = { close };
+  wrapper._animatedSelectClose = close;
+  animatedSelects.add(api);
+  trigger.addEventListener('click', () => wrapper.classList.contains('is-open') ? close(true) : open());
+  trigger.addEventListener('keydown', (event) => {
+    if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+      event.preventDefault();
+      open();
+    }
+  });
+  menu.addEventListener('click', (event) => choose(event.target.closest('.animated-select-option')));
+  menu.addEventListener('keydown', (event) => {
+    const option = event.target.closest('.animated-select-option');
+    if (!option) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      move(option, event.key === 'ArrowDown' ? 1 : -1);
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      const options = enabledOptions();
+      options[event.key === 'Home' ? 0 : options.length - 1]?.focus();
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      choose(option);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      close(true);
+    } else if (event.key === 'Tab') {
+      close();
+    }
+  });
+  select.addEventListener('change', sync);
+  new MutationObserver(sync).observe(select, { attributes: true, attributeFilter: ['aria-invalid'] });
+  select.form?.addEventListener('reset', () => requestAnimationFrame(sync));
+  sync();
+};
+document.querySelectorAll('select').forEach(enhanceSelect);
+document.addEventListener('pointerdown', (event) => {
+  document.querySelectorAll('.animated-select.is-open').forEach((wrapper) => {
+    if (!wrapper.contains(event.target)) wrapper._animatedSelectClose?.();
+  });
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeAnimatedSelects();
+});
 if (location.pathname === '/services/') {
   const legacyTarget = {
     '#google-ads': '/services/',
@@ -295,6 +439,7 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
   const successMessage = form.querySelector('[data-success-message]');
   const resetButton = form.querySelector('[data-form-reset]');
   const formStatus = form.querySelector('[data-form-status]');
+  const formFallback = form.querySelector('[data-form-fallback]');
   const submitButton = form.querySelector('button[type="submit"]');
   const submitLabel = submitButton?.querySelector('.consultation-action-label, .button-label') || submitButton;
   const defaultSubmitLabel = submitLabel?.textContent || '';
@@ -453,7 +598,8 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
     });
     updateProgress();
     if (firstInvalid) {
-      firstInvalid.focus();
+      const enhancedTrigger = firstInvalid.closest('.animated-select')?.querySelector('.animated-select-trigger');
+      (enhancedTrigger || firstInvalid).focus();
       return false;
     }
     return true;
@@ -461,6 +607,7 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
 
   form.addEventListener('input', (event) => {
     if (formStatus) formStatus.textContent = '';
+    if (formFallback) formFallback.hidden = true;
     if (event.target.matches('input, select, textarea')) {
       if (event.target === phoneField) phoneStep?.setAttribute('data-phone-touched', '');
       setFieldError(event.target);
@@ -500,13 +647,47 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
     }
     if (submitLabel) submitLabel.textContent = isConsultation ? 'Sending Request…' : 'Sending Message…';
     try {
-      const response = await fetch(form.action, {
-        method: 'POST',
-        headers: { Accept: 'application/json' },
-        body: new FormData(form)
+      if (formFallback) formFallback.hidden = true;
+      const formData = new FormData(form);
+      const submission = {};
+      formData.forEach((entryValue, key) => {
+        if (typeof entryValue !== 'string') return;
+        if (Object.prototype.hasOwnProperty.call(submission, key)) {
+          submission[key] = `${submission[key]}, ${entryValue}`;
+        } else {
+          submission[key] = entryValue;
+        }
       });
+      const endpoint = form.dataset.ajaxAction || form.action;
+      const submitRequest = async () => {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 20000);
+        try {
+          return await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json'
+            },
+            body: JSON.stringify(submission),
+            signal: controller.signal
+          });
+        } finally {
+          window.clearTimeout(timeout);
+        }
+      };
+      let response = await submitRequest();
+      if (response.status === 429 || response.status >= 500) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        response = await submitRequest();
+      }
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok || payload.success === false || payload.success === 'false') throw new Error('FormSubmit rejected the request.');
+      if (!response.ok || payload.success === false || payload.success === 'false') {
+        const error = new Error('FormSubmit rejected the request.');
+        error.status = response.status;
+        error.providerMessage = typeof payload.message === 'string' ? payload.message : '';
+        throw error;
+      }
       if (formContent) formContent.hidden = true;
       if (successMessage) successMessage.textContent = isConsultation
         ? 'Thank you! Your consultation request has been received. I’ll review your information and contact you soon.'
@@ -517,8 +698,16 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
       }
       if (formStatus) formStatus.replaceChildren();
       resetSubmission();
-    } catch {
-      resetSubmission('Your request could not be submitted. Please check your connection and try again.');
+    } catch (error) {
+      const serviceUnavailable = error?.name === 'AbortError' || error?.status === 429 || error?.status >= 500;
+      const activationRequired = /activat|confirm/i.test(error?.providerMessage || '');
+      const message = activationRequired
+        ? 'This form needs one-time email confirmation before it can receive requests. Please email Aaditya directly for now.'
+        : serviceUnavailable
+          ? 'The form service is temporarily unavailable. Your information is still here—please try again shortly or email Aaditya directly.'
+          : 'Your request could not be submitted. Your information is still here—please try again or email Aaditya directly.';
+      if (formFallback) formFallback.hidden = false;
+      resetSubmission(message);
     }
   });
 
@@ -528,6 +717,7 @@ document.querySelectorAll('[data-submit-form]').forEach((form) => {
     form.querySelectorAll('.field-error').forEach((error) => error.replaceChildren());
     form.querySelectorAll('[data-country-picker]').forEach((picker) => picker.dispatchEvent(new Event('country-picker-reset')));
     if (formStatus) formStatus.replaceChildren();
+    if (formFallback) formFallback.hidden = true;
     if (successSection) successSection.hidden = true;
     if (formContent) formContent.hidden = false;
     updateOtherChallenge();
